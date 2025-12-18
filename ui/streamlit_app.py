@@ -1,4 +1,3 @@
-import os
 import json
 import pickle
 from pathlib import Path
@@ -7,15 +6,10 @@ import streamlit as st
 from bs4 import BeautifulSoup
 
 st.set_page_config(page_title="SHL Assessment Recommender", layout="wide")
-st.title("SHL Assessment Recommendation Demo")
+st.title("🎯 SHL Assessment Recommendation System")
 
-api_url = os.getenv("API_URL", "").strip()
-
-# Debug: Show API_URL status
-if api_url:
-    st.info(f"✅ API_URL configured: {api_url}")
-else:
-    st.info("🔍 Using local BM25 search (no API needed)")
+# Show status
+st.info("✅ Recommendation system ready - Enter a query or job URL below")
 
 query = st.text_area("Enter hiring query or JD URL", height=160, placeholder="e.g., Need a Java developer with stakeholder communication skills. Time limit 40 minutes. Or paste a LinkedIn job URL.")
 
@@ -88,26 +82,19 @@ if st.button("Recommend"):
             st.warning("Could not extract text from URL, using URL as query")
 
     try:
-        if api_url:
-            # Call deployed API
-            resp = requests.post(api_url.rstrip("/") + "/recommend", json={"query": search_query}, timeout=60)
-            resp.raise_for_status()
-            data = resp.json()
-            recs = data.get("recommended_assessments", [])
-        else:
-            # Local BM25 search
-            bm25, meta = load_bm25_index()
-            if bm25 is None or meta is None:
-                st.error("Could not load search index.")
-                st.stop()
-            
-            # BM25 search
-            query_tokens = search_query.lower().split()
-            scores = bm25.get_scores(query_tokens)
-            
-            # Get top 10
-            top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:10]
-            recs = [meta[i] for i in top_indices if i < len(meta)]
+        # Local BM25 search
+        bm25, meta = load_bm25_index()
+        if bm25 is None or meta is None:
+            st.error("Could not load search index.")
+            st.stop()
+        
+        # BM25 search
+        query_tokens = search_query.lower().split()
+        scores = bm25.get_scores(query_tokens)
+        
+        # Get top 10
+        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:10]
+        recs = [meta[i] for i in top_indices if i < len(meta)]
 
         if not recs:
             st.error("No recommendations returned.")

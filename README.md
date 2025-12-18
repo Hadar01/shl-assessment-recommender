@@ -1,8 +1,8 @@
-# SHL Assessment Recommendation Engine
+# SHL Assessment Recommendation System
 
-A production-ready **hybrid search system** that recommends relevant SHL Individual Test Solutions based on job titles and skills.
+A production-ready AI-powered recommendation system that suggests the most relevant SHL assessments based on hiring queries, job descriptions, or unstructured input.
 
-**Status:** ✅ Production Ready | **Performance:** 23.78% Recall@10 | **Coverage:** 377+ assessments
+**Status:** ✅ Production Ready | **Recall@10:** 23.78% | **Dataset:** 377 real SHL assessments
 
 ---
 

@@ -58,13 +58,23 @@ def get_recommender() -> Recommender:
 @app.post("/recommend")
 def recommend(req: RecommendRequest):
     try:
+        print(f"[DEBUG] Attempting to get recommender...")
         rec = get_recommender()
+        if rec is None:
+            return {
+                "error": "Recommender is None - failed to initialize",
+                "recommended_assessments": []
+            }
+        print(f"[DEBUG] Got recommender, calling recommend with query: {req.query}")
         items = rec.recommend(req.query, k=10)
+        print(f"[DEBUG] Got {len(items)} items")
         return {"recommended_assessments": items}
     except Exception as e:
         import traceback
+        tb = traceback.format_exc()
+        print(f"[ERROR] {tb}")
         return {
             "error": str(e),
-            "traceback": traceback.format_exc(),
+            "traceback": tb,
             "recommended_assessments": []
         }

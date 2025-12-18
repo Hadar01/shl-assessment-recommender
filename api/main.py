@@ -1,7 +1,6 @@
 from fastapi import FastAPI
 from pydantic import BaseModel
 import os
-import sys
 import traceback
 from pathlib import Path
 import logging
@@ -15,49 +14,12 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Global recommender - pre-loaded on startup
+# Global recommender - lazy loaded on first use (to save memory)
 _recommender = None
-_startup_error = None
+_load_attempted = False
 
 class RecommendRequest(BaseModel):
     query: str
-
-@app.on_event("startup")
-async def startup_event():
-    """Pre-load recommender on app startup for fast responses"""
-    global _recommender, _startup_error
-    
-    try:
-        logger.info("[STARTUP] Loading recommender...")
-        
-        # Import modules
-        from shlrec.recommender import Recommender
-        from shlrec.settings import get_settings
-        
-        # Load settings
-        settings = get_settings()
-        logger.info(f"[STARTUP] Settings loaded: index_dir={settings.index_dir}")
-        
-        # Verify index exists
-        index_dir = Path(settings.index_dir)
-        if not index_dir.exists():
-            raise FileNotFoundError(f"Index dir not found: {index_dir}")
-        
-        # Create and initialize recommender
-        logger.info("[STARTUP] Creating Recommender instance...")
-        _recommender = Recommender(index_dir=settings.index_dir)
-        
-        # Trigger full load (not lazy)
-        logger.info("[STARTUP] Triggering full initialization...")
-        _recommender._lazy_load()
-        
-        logger.info("[STARTUP] SUCCESS - Recommender ready!")
-        
-    except Exception as e:
-        msg = f"[STARTUP] FAILED: {type(e).__name__}: {e}"
-        logger.error(msg)
-        logger.error(traceback.format_exc())
-        _startup_error = str(e)
 
 @app.get("/")
 def root():
@@ -69,34 +31,70 @@ def root():
 
 @app.get("/health")
 def health():
-    status = "ready" if _recommender else "degraded"
-    return {
-        "status": "healthy",
-        "recommender": status,
-        "error": _startup_error
-    }
+    return {"status": "healthy"}
+
+def get_or_load_recommender():
+    """Lazy load recommender only when needed (memory efficient)"""
+    global _recommender, _load_attempted
+    
+    if _recommender is not None:
+        return _recommender
+    
+    if _load_attempted:
+        logger.warning("Recommender already attempted to load and failed")
+        return None
+    
+    _load_attempted = True
+    
+    try:
+        logger.info("[LOAD] Loading recommender...")
+        
+        from shlrec.recommender import Recommender
+        from shlrec.settings import get_settings
+        
+        settings = get_settings()
+        index_dir = Path(settings.index_dir)
+        
+        if not index_dir.exists():
+            raise FileNotFoundError(f"Index dir not found: {index_dir}")
+        
+        logger.info(f"[LOAD] Creating Recommender from {index_dir}")
+        _recommender = Recommender(index_dir=settings.index_dir)
+        
+        logger.info("[LOAD] Triggering lazy load...")
+        _recommender._lazy_load()
+        
+        logger.info("[SUCCESS] Recommender ready!")
+        return _recommender
+        
+    except Exception as e:
+        logger.error(f"[ERROR] Failed to load: {type(e).__name__}: {e}")
+        logger.error(traceback.format_exc())
+        return None
 
 @app.post("/recommend")
 def recommend(req: RecommendRequest):
     """
     Main recommendation endpoint.
-    Uses hybrid search (BM25 + semantic embeddings) with Gemini intent extraction.
+    Lazy loads recommender on first request.
     """
-    logger.info(f"[REQUEST] Query: {req.query[:100]}")
+    logger.info(f"[REQUEST] Query: {req.query[:80]}")
     
     try:
-        if _recommender is None:
-            logger.warning("[REQUEST] Recommender not available!")
+        rec = get_or_load_recommender()
+        
+        if rec is None:
+            logger.warning("[FALLBACK] Using mock recommendations")
             return get_mock_recommendations(req.query)
         
         logger.info("[EXEC] Calling recommender.recommend()...")
-        results = _recommender.recommend(query_or_url=req.query, k=10)
+        results = rec.recommend(query_or_url=req.query, k=10)
         
         if results:
             logger.info(f"[SUCCESS] Returned {len(results)} recommendations")
             return {"recommended_assessments": results}
         else:
-            logger.warning("[EMPTY] Recommender returned empty list")
+            logger.warning("[EMPTY] Recommender returned no results")
             return get_mock_recommendations(req.query)
             
     except Exception as e:
@@ -106,7 +104,7 @@ def recommend(req: RecommendRequest):
 
 def get_mock_recommendations(query: str):
     """Fallback mock recommendations"""
-    logger.info(f"[MOCK] Returning fallback for: {query[:50]}")
+    logger.info(f"[MOCK] Returning fallback for: {query[:40]}")
     
     return {
         "recommended_assessments": [

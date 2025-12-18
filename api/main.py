@@ -104,7 +104,7 @@ def recommend(req: RecommendRequest):
             return get_mock_recommendations(req.query)
         
         print("[RECOMMENDER] Calling recommend()...")
-        results = rec.recommend(query=req.query, k=10)
+        results = rec.recommend(query_or_url=req.query, k=10)
         
         if results:
             print(f"[SUCCESS] Returned {len(results)} real recommendations")

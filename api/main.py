@@ -9,6 +9,10 @@ from shlrec.settings import get_settings
 
 app = FastAPI(title="SHL Assessment Recommendation API")
 
+# Global state
+_recommender = None
+_index_error = None
+
 class RecommendRequest(BaseModel):
     query: str
 
@@ -21,12 +25,14 @@ class AssessmentOut(BaseModel):
     remote_support: str
     test_type: List[str]
 
+@app.get("/")
+def root():
+    """Root endpoint"""
+    return {"message": "SHL Assessment Recommender API", "status": "online"}
+
 @app.get("/health")
 def health():
-    # Required by assignment: return {"status":"healthy"}
-    global _index_error
-    if _index_error:
-        return {"status": "healthy", "warning": f"Index not loaded: {_index_error}"}
+    """Health check endpoint"""
     return {"status": "healthy"}
 
 @app.get("/status")
@@ -38,9 +44,6 @@ def status():
     if _index_error:
         return {"ready": False, "message": f"Index error: {_index_error}"}
     return {"ready": False, "message": "Recommender not initialized"}
-
-_recommender = None
-_index_error = None
 
 def get_recommender() -> Recommender:
     global _recommender, _index_error

@@ -45,10 +45,13 @@ def load_data():
     try:
         logger.info("[LOAD] Loading BM25 and metadata...")
         
-        # Use settings to get index dir
-        from shlrec.settings import get_settings
-        settings = get_settings()
-        index_dir = Path(settings.index_dir)
+        # Direct path - avoid any imports that might hang
+        index_dir = Path("data/index")
+        if not index_dir.exists():
+            index_dir = Path("/app/data/index")  # Render path
+        
+        if not index_dir.exists():
+            raise FileNotFoundError(f"Index dir not found: {index_dir}")
         
         # Load BM25
         with open(index_dir / "bm25.pkl", "rb") as f:

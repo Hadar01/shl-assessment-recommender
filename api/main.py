@@ -34,7 +34,7 @@ def health():
     return {"status": "healthy"}
 
 def get_or_load_recommender():
-    """Lazy load recommender only when needed (BM25 only for speed on free tier)"""
+    """Lazy load BM25-only recommender (no embeddings = FAST)"""
     global _recommender, _load_attempted
     
     if _recommender is not None:
@@ -47,11 +47,11 @@ def get_or_load_recommender():
     _load_attempted = True
     
     try:
-        logger.info("[LOAD] Loading BM25-only recommender...")
+        logger.info("[LOAD] Loading BM25-only index...")
         
         import pickle
         import json
-        from rank_bm25 import BM25Okapi
+        import numpy as np
         
         settings_module = __import__('shlrec.settings', fromlist=['get_settings'])
         settings = settings_module.get_settings()
@@ -60,66 +60,59 @@ def get_or_load_recommender():
         if not index_dir.exists():
             raise FileNotFoundError(f"Index dir not found: {index_dir}")
         
-        # Load BM25 index (very fast)
-        logger.info("[LOAD] Loading BM25 index...")
+        # Load BM25 (fast)
         with open(index_dir / "bm25.pkl", "rb") as f:
             bm25 = pickle.load(f)
         
         # Load metadata (fast)
-        logger.info("[LOAD] Loading metadata...")
         with open(index_dir / "meta.json", "r") as f:
             meta = json.load(f)
         
-        # Create minimal recommender object
-        _recommender = type('SimpleRec', (), {
-            'bm25': bm25,
-            'meta': meta,
-            'tokens': None
-        })()
+        # Create minimal object
+        class FastRec:
+            def __init__(self, bm25, meta):
+                self.bm25 = bm25
+                self.meta = meta
+            
+            def search(self, query: str, k: int = 10):
+                # Tokenize
+                query_tokens = query.lower().split()
+                # Get BM25 scores
+                scores = self.bm25.get_scores(query_tokens)
+                # Get top k
+                top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
+                # Return metadata
+                return [self.meta[idx] for idx in top_indices if idx < len(self.meta)]
         
+        _recommender = FastRec(bm25, meta)
         logger.info("[SUCCESS] BM25 recommender ready!")
         return _recommender
         
     except Exception as e:
-        logger.error(f"[ERROR] Failed to load: {type(e).__name__}: {e}")
+        logger.error(f"[ERROR] {type(e).__name__}: {e}")
         logger.error(traceback.format_exc())
         return None
 
 @app.post("/recommend")
 def recommend(req: RecommendRequest):
-    """
-    Recommendation endpoint using fast BM25 search.
-    """
+    """Recommendation endpoint - BM25 search"""
     logger.info(f"[REQUEST] Query: {req.query[:100]}")
     
     try:
         rec = get_or_load_recommender()
         
         if rec is None:
-            logger.warning("[FALLBACK] Using mock recommendations")
+            logger.warning("[FALLBACK] Recommender unavailable")
             return get_mock_recommendations(req.query)
         
         logger.info("[EXEC] Running BM25 search...")
-        
-        # BM25 search
-        query_tokens = req.query.lower().split()
-        scores = rec.bm25.get_scores(query_tokens)
-        
-        # Get top 10
-        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:10]
-        
-        # Build results
-        results = []
-        for idx in top_indices:
-            if idx < len(rec.meta):
-                item = dict(rec.meta[idx])
-                results.append(item)
+        results = rec.search(req.query, k=10)
         
         if results:
             logger.info(f"[SUCCESS] Returned {len(results)} recommendations")
             return {"recommended_assessments": results}
         else:
-            logger.warning("[EMPTY] BM25 returned no results")
+            logger.warning("[EMPTY] No results")
             return get_mock_recommendations(req.query)
             
     except Exception as e:

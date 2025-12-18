@@ -99,20 +99,23 @@ def recommend(req: RecommendRequest):
     logger.info(f"[REQUEST] Query: {req.query[:100]}")
     
     try:
+        logger.info("[DEBUG] Starting get_or_load_recommender...")
         rec = get_or_load_recommender()
+        logger.info(f"[DEBUG] Got recommender: {rec is not None}")
         
         if rec is None:
-            logger.warning("[FALLBACK] Recommender unavailable")
+            logger.warning("[FALLBACK] Recommender is None - loading failed")
             return get_mock_recommendations(req.query)
         
         logger.info("[EXEC] Running BM25 search...")
         results = rec.search(req.query, k=10)
+        logger.info(f"[DEBUG] Search returned: {len(results)} items")
         
-        if results:
+        if results and len(results) > 0:
             logger.info(f"[SUCCESS] Returned {len(results)} recommendations")
             return {"recommended_assessments": results}
         else:
-            logger.warning("[EMPTY] No results")
+            logger.warning("[EMPTY] BM25 search returned 0 results")
             return get_mock_recommendations(req.query)
             
     except Exception as e:

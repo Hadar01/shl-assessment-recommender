@@ -64,8 +64,8 @@ def get_or_load_recommender():
         with open(index_dir / "bm25.pkl", "rb") as f:
             bm25 = pickle.load(f)
         
-        # Load metadata (fast)
-        with open(index_dir / "meta.json", "r") as f:
+        # Load metadata (fast) - MUST use UTF-8 encoding
+        with open(index_dir / "meta.json", "r", encoding="utf-8") as f:
             meta = json.load(f)
         
         # Create minimal object

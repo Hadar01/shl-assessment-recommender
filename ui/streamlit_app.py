@@ -19,22 +19,24 @@ if st.button("Recommend"):
         st.warning("Please enter a query or URL.")
         st.stop()
 
-    if api_url:
-        # Call deployed API
-        resp = requests.post(api_url.rstrip("/") + "/recommend", json={"query": query}, timeout=60)
-        resp.raise_for_status()
-        data = resp.json()
-        recs = data.get("recommended_assessments", [])
-    else:
-        # Local import (no server required)
-        from shlrec.recommender import Recommender
-        from shlrec.settings import get_settings
-        s = get_settings()
-        recs = Recommender(index_dir=s.index_dir).recommend(query, k=10)
+    try:
+        if api_url:
+            # Call deployed API
+            resp = requests.post(api_url.rstrip("/") + "/recommend", json={"query": query}, timeout=60)
+            resp.raise_for_status()
+            data = resp.json()
+            recs = data.get("recommended_assessments", [])
+        else:
+            # Local import (no server required)
+            from shlrec.recommender import Recommender
+            from shlrec.settings import get_settings
+            s = get_settings()
+            recs = Recommender(index_dir=s.index_dir).recommend(query, k=10)
 
-    if not recs:
-        st.error("No recommendations returned.")
-    else:
-        st.success(f"Returned {len(recs)} recommendations")
-        st.dataframe(recs, use_container_width=True)
-        st.markdown("Tip: set `API_URL` to your deployed API (e.g., `https://your-api.onrender.com`).")
+        if not recs:
+            st.error("No recommendations returned.")
+        else:
+            st.success(f"Returned {len(recs)} recommendations")
+            st.dataframe(recs, use_container_width=True)
+    except Exception as e:
+        st.error(f"Error fetching recommendations: {str(e)}")

@@ -1,6 +1,8 @@
 .git
 .gitignore
 .venv
+venv
+env
 .vscode
 .idea
 __pycache__
@@ -22,13 +24,9 @@ node_modules
 *.swp
 *.swo
 *~
-.idea/
-.vscode/
-debug_corpus.py
-request.json
-content.pdf
-dy
-.git/
-.gitignore
+.github
+docs
+scripts
+*.md
 README_ORGANIZATION.md
 SUMMARY_FOR_YOU.md

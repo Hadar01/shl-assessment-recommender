@@ -8,11 +8,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements
-COPY requirements.txt .
+# Copy requirements - use base dependencies (no heavy ML packages needed at runtime)
+COPY requirements-base.txt .
 
-# Install Python dependencies
-RUN pip install --user --no-cache-dir -r requirements.txt
+# Install Python dependencies with better caching
+# Use --prefer-binary to avoid compiling from source (faster on Railway)
+RUN pip install --user --no-cache-dir --prefer-binary -r requirements-base.txt
 
 # Runtime stage
 FROM python:3.12-slim

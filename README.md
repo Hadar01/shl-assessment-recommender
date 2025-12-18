@@ -13,6 +13,7 @@ A production-ready **hybrid search system** that recommends relevant SHL Individ
 | What You Want | Go To |
 |---------------|--------|
 | **Quick setup (5 min)** | [QUICK_START.md](./docs/setup/QUICK_START.md) |
+| **Deploy to production** | [DEPLOYMENT.md](./docs/setup/DEPLOYMENT.md) |
 | **Understand the system** | [SYSTEM_DESIGN.md](./docs/architecture/SYSTEM_DESIGN.md) |
 | **See code organization** | [CODE_STRUCTURE.md](./docs/architecture/CODE_STRUCTURE.md) |
 | **Check performance** | [METRICS.md](./docs/evaluation/METRICS.md) |

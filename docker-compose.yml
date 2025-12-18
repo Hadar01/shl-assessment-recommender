@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # API Service
+  api:
+    build: .
+    container_name: shl-recommender-api
+    ports:
+      - "8000:8000"
+    environment:
+      - HYBRID_ALPHA=0.39
+      - CANDIDATE_POOL=200
+      - INDEX_DIR=/app/data/index
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Streamlit UI Service (optional)
+  ui:
+    build: .
+    container_name: shl-recommender-ui
+    command: streamlit run ui/streamlit_app.py --server.port=8501 --server.address=0.0.0.0
+    ports:
+      - "8501:8501"
+    environment:
+      - HYBRID_ALPHA=0.39
+      - CANDIDATE_POOL=200
+      - INDEX_DIR=/app/data/index
+      - GEMINI_API_KEY=${GEMINI_API_KEY:-}
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    restart: unless-stopped
+    depends_on:
+      api:
+        condition: service_healthy
+
+volumes:
+  data:
+  logs:
+
+networks:
+  default:
+    name: shl-network

@@ -1,17 +1,106 @@
-# SHL Assessment Recommendation Engine (Starter)
+# SHL Assessment Recommendation Engine
 
-This is a **starter project** for SHL's take-home assignment: a recommender that returns **5–10 Individual Test Solutions**
-given either a **natural language query** or a **Job Description URL**, exposed via a required FastAPI API.
+A production-ready **hybrid search system** that recommends relevant SHL Individual Test Solutions based on job titles and skills.
 
-The assignment requires:
-- **Scraping and storing** SHL's product catalog (≥ 377 Individual Test Solutions)
-- **LLM or retrieval-based integration**
-- **Measurable evaluation** (e.g., Mean Recall@10)
-- API endpoints and response schema exactly as specified in the brief (see `data/SHL_assignment.pdf`)
+**Status:** ✅ Production Ready | **Performance:** 23.78% Recall@10 | **Coverage:** 377+ assessments
 
 ---
 
-## 0) Setup
+## 📚 Documentation Overview
+
+**New to this project?** Start here:
+
+| What You Want | Go To |
+|---------------|--------|
+| **Quick setup (5 min)** | [QUICK_START.md](./docs/setup/QUICK_START.md) |
+| **Understand the system** | [SYSTEM_DESIGN.md](./docs/architecture/SYSTEM_DESIGN.md) |
+| **See code organization** | [CODE_STRUCTURE.md](./docs/architecture/CODE_STRUCTURE.md) |
+| **Check performance** | [METRICS.md](./docs/evaluation/METRICS.md) |
+| **Verify deliverables** | [DELIVERABLES.md](./docs/submission/DELIVERABLES.md) |
+| **Full documentation** | [docs/INDEX.md](./docs/INDEX.md) |
+| **Repository layout** | [REPOSITORY_ORGANIZATION.md](./REPOSITORY_ORGANIZATION.md) |
+
+---
+
+## ⚡ Quick Start
+
+### 1. Install Dependencies
+```bash
+pip install -r requirements.txt
+```
+
+### 2. Run the API Server
+```bash
+python -m uvicorn api.main:app --reload
+```
+Visit: **http://localhost:8000/docs** (Interactive API)
+
+### 3. (Optional) Run the Streamlit UI
+```bash
+streamlit run ui/streamlit_app.py
+```
+Visit: **http://localhost:8501**
+
+---
+
+## 🏗️ System Architecture
+
+```
+User Query → Hybrid Search (BM25 + Embeddings) → Candidate Pool → K/P Balancing → Top 10 Recommendations
+             (39% BM25 + 61% Semantic)          (200 results)
+```
+
+**Key Features:**
+- ✅ **Hybrid Search:** 39% BM25 (keyword) + 61% semantic (meaning)
+- ✅ **Fast & Accurate:** ~40ms latency, 23.78% Recall@10
+- ✅ **Smart Balancing:** Ensures mix of Knowledge & Practical tests
+- ✅ **LLM-Ready:** Optional Gemini integration for advanced features
+- ✅ **Well-Documented:** Comprehensive architecture & code guides
+
+---
+
+## 📂 Repository Organization
+
+```
+docs/                 ← Documentation (organized by topic)
+├── setup/            ← Getting started & deployment  
+├── architecture/     ← System design & code structure
+├── evaluation/       ← Performance metrics & analysis
+└── submission/       ← Deliverables & verification
+
+shlrec/               ← Core recommendation engine
+api/                  ← REST API (FastAPI)
+ui/                   ← Streamlit dashboard
+scripts/              ← Data pipelines & tools
+data/                 ← Index, catalog, predictions
+```
+
+**See [REPOSITORY_ORGANIZATION.md](./REPOSITORY_ORGANIZATION.md) for detailed layout.**
+
+---
+
+## 🚀 Next Steps
+
+### For Different Audiences:
+
+**👤 End Users / Reviewers:**
+1. [QUICK_START.md](./docs/setup/QUICK_START.md) - Setup in 5 minutes
+2. [DELIVERABLES.md](./docs/submission/DELIVERABLES.md) - Verify all components
+
+**👨‍💻 Developers:**
+1. [SYSTEM_DESIGN.md](./docs/architecture/SYSTEM_DESIGN.md) - Architecture overview
+2. [CODE_STRUCTURE.md](./docs/architecture/CODE_STRUCTURE.md) - Code walkthrough
+3. Explore: `shlrec/recommender.py` → `shlrec/retrieval.py`
+
+**📊 Data Scientists:**
+1. [METRICS.md](./docs/evaluation/METRICS.md) - Performance analysis
+2. Run: `python -m scripts.evaluate_train --xlsx data/Gen_AI\ Dataset.xlsx --index_dir data/index`
+
+---
+
+## 📖 Traditional Setup Instructions
+
+### 0) Setup
 
 ### Create venv + install deps
 ```bash

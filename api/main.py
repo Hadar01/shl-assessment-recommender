@@ -57,7 +57,14 @@ def get_recommender() -> Recommender:
 
 @app.post("/recommend")
 def recommend(req: RecommendRequest):
-    rec = get_recommender()
-    items = rec.recommend(req.query, k=10)
-    # Ensure response schema matches assignment exactly
-    return {"recommended_assessments": items}
+    try:
+        rec = get_recommender()
+        items = rec.recommend(req.query, k=10)
+        return {"recommended_assessments": items}
+    except Exception as e:
+        import traceback
+        return {
+            "error": str(e),
+            "traceback": traceback.format_exc(),
+            "recommended_assessments": []
+        }

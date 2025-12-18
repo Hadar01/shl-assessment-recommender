@@ -1,4 +1,7 @@
 import os
+import json
+import pickle
+from pathlib import Path
 import requests
 import streamlit as st
 
@@ -11,8 +14,28 @@ api_url = os.getenv("API_URL", "").strip()
 if api_url:
     st.info(f"✅ API_URL configured: {api_url}")
 else:
-    st.warning("❌ API_URL not set - will use local import")
+    st.info("🔍 Using local BM25 search (no API needed)")
+
 query = st.text_area("Enter hiring query or JD URL", height=160, placeholder="e.g., Need a Java developer with stakeholder communication skills. Time limit 40 minutes.")
+
+@st.cache_resource
+def load_bm25_index():
+    """Load BM25 index and metadata"""
+    try:
+        index_dir = Path("data/index")
+        
+        # Load BM25
+        with open(index_dir / "bm25.pkl", "rb") as f:
+            bm25 = pickle.load(f)
+        
+        # Load metadata
+        with open(index_dir / "meta.json", "r", encoding="utf-8") as f:
+            meta = json.load(f)
+        
+        return bm25, meta
+    except Exception as e:
+        st.error(f"Failed to load index: {e}")
+        return None, None
 
 if st.button("Recommend"):
     if not query.strip():
@@ -27,16 +50,24 @@ if st.button("Recommend"):
             data = resp.json()
             recs = data.get("recommended_assessments", [])
         else:
-            # Local import (no server required)
-            from shlrec.recommender import Recommender
-            from shlrec.settings import get_settings
-            s = get_settings()
-            recs = Recommender(index_dir=s.index_dir).recommend(query, k=10)
+            # Local BM25 search
+            bm25, meta = load_bm25_index()
+            if bm25 is None or meta is None:
+                st.error("Could not load search index.")
+                st.stop()
+            
+            # BM25 search
+            query_tokens = query.lower().split()
+            scores = bm25.get_scores(query_tokens)
+            
+            # Get top 10
+            top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:10]
+            recs = [meta[i] for i in top_indices if i < len(meta)]
 
         if not recs:
             st.error("No recommendations returned.")
         else:
-            st.success(f"Returned {len(recs)} recommendations")
+            st.success(f"✅ Returned {len(recs)} recommendations")
             st.dataframe(recs, use_container_width=True)
     except Exception as e:
         st.error(f"Error fetching recommendations: {str(e)}")

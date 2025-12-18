@@ -1,30 +1,33 @@
-# Build stage - Alpine for minimal size
-FROM python:3.12-alpine as builder
+# Build stage - Debian Slim for better compatibility
+FROM python:3.12-slim as builder
 
 WORKDIR /app
 
-# Install minimal build dependencies
-RUN apk add --no-cache gcc musl-dev linux-headers
+# Install build dependencies (minimal)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    && rm -rf /var/lib/apt/lists/*
 
-# Copy requirements - ultra-minimal
+# Copy requirements
 COPY requirements-base.txt .
 
-# Install Python dependencies with aggressive optimization
+# Install Python dependencies with optimization
 # --prefer-binary: use pre-built wheels (no compilation)
 # --no-cache-dir: don't cache pip downloads
-# --no-deps: no dependency resolution (trust requirements.txt)
-RUN pip install --user --no-cache-dir --prefer-binary --no-deps -r requirements-base.txt && \
+RUN pip install --user --no-cache-dir --prefer-binary -r requirements-base.txt && \
     find /root/.local -type d -name "tests" -exec rm -rf {} + 2>/dev/null || true && \
     find /root/.local -type f -name "*.pyc" -delete && \
     find /root/.local -type f -name "*.dist-info" -delete 2>/dev/null || true
 
-# Runtime stage - Alpine for minimal final image
-FROM python:3.12-alpine
+# Runtime stage - Debian Slim (small but compatible)
+FROM python:3.12-slim
 
 WORKDIR /app
 
 # Install minimal runtime dependencies
-RUN apk add --no-cache curl
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
 
 # Copy Python dependencies from builder
 COPY --from=builder /root/.local /root/.local
@@ -38,7 +41,7 @@ ENV PATH=/root/.local/bin:$PATH \
 COPY . .
 
 # Create non-root user
-RUN adduser -D -u 1000 appuser && chown -R appuser:appuser /app
+RUN useradd -m -u 1000 appuser && chown -R appuser:appuser /app
 USER appuser
 
 # Expose port

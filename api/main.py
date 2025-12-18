@@ -2,7 +2,10 @@ from fastapi import FastAPI
 from pydantic import BaseModel
 import os
 
-app = FastAPI(title="SHL Assessment Recommendation API")
+app = FastAPI(
+    title="SHL Assessment Recommendation API",
+    version="1.0.0"
+)
 
 # Don't load Recommender at startup - lazy load instead
 _recommender = None

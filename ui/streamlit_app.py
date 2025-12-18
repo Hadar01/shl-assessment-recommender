@@ -6,6 +6,12 @@ st.set_page_config(page_title="SHL Assessment Recommender", layout="wide")
 st.title("SHL Assessment Recommendation Demo")
 
 api_url = os.getenv("API_URL", "").strip()
+
+# Debug: Show API_URL status
+if api_url:
+    st.info(f"✅ API_URL configured: {api_url}")
+else:
+    st.warning("❌ API_URL not set - will use local import")
 query = st.text_area("Enter hiring query or JD URL", height=160, placeholder="e.g., Need a Java developer with stakeholder communication skills. Time limit 40 minutes.")
 
 if st.button("Recommend"):

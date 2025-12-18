@@ -4,6 +4,8 @@ import os
 import traceback
 from pathlib import Path
 import logging
+import pickle
+import json
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -14,139 +16,102 @@ app = FastAPI(
     version="1.0.0"
 )
 
-# Global recommender - lazy loaded on first use (to save memory)
-_recommender = None
-_load_attempted = False
-
-class RecommendRequest(BaseModel):
-    query: str
+# Global data - loaded once
+_bm25 = None
+_meta = None
+_load_error = None
 
 @app.get("/")
 def root():
     return {
         "message": "SHL Assessment Recommender API",
-        "status": "online",
-        "version": "1.0.0"
+        "status": "online"
     }
 
 @app.get("/health")
 def health():
-    return {"status": "healthy"}
+    return {"status": "healthy", "data_loaded": _bm25 is not None}
 
-def get_or_load_recommender():
-    """Lazy load BM25-only recommender (no embeddings = FAST)"""
-    global _recommender, _load_attempted
+def load_data():
+    """Load BM25 and metadata on first need"""
+    global _bm25, _meta, _load_error
     
-    if _recommender is not None:
-        return _recommender
+    if _bm25 is not None:
+        return True
     
-    if _load_attempted:
-        logger.warning("Recommender already attempted to load and failed")
-        return None
-    
-    _load_attempted = True
+    if _load_error:
+        return False
     
     try:
-        logger.info("[LOAD] Loading BM25-only index...")
+        logger.info("[LOAD] Loading BM25 and metadata...")
         
-        import pickle
-        import json
-        import numpy as np
-        
-        settings_module = __import__('shlrec.settings', fromlist=['get_settings'])
-        settings = settings_module.get_settings()
+        # Use settings to get index dir
+        from shlrec.settings import get_settings
+        settings = get_settings()
         index_dir = Path(settings.index_dir)
         
-        if not index_dir.exists():
-            raise FileNotFoundError(f"Index dir not found: {index_dir}")
-        
-        # Load BM25 (fast)
+        # Load BM25
         with open(index_dir / "bm25.pkl", "rb") as f:
-            bm25 = pickle.load(f)
+            _bm25 = pickle.load(f)
         
-        # Load metadata (fast) - MUST use UTF-8 encoding
+        # Load meta
         with open(index_dir / "meta.json", "r", encoding="utf-8") as f:
-            meta = json.load(f)
+            _meta = json.load(f)
         
-        # Create minimal object
-        class FastRec:
-            def __init__(self, bm25, meta):
-                self.bm25 = bm25
-                self.meta = meta
-            
-            def search(self, query: str, k: int = 10):
-                # Tokenize
-                query_tokens = query.lower().split()
-                # Get BM25 scores
-                scores = self.bm25.get_scores(query_tokens)
-                # Get top k
-                top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:k]
-                # Return metadata
-                return [self.meta[idx] for idx in top_indices if idx < len(self.meta)]
-        
-        _recommender = FastRec(bm25, meta)
-        logger.info("[SUCCESS] BM25 recommender ready!")
-        return _recommender
+        logger.info(f"[LOAD] SUCCESS: Loaded {len(_meta)} assessments")
+        return True
         
     except Exception as e:
-        logger.error(f"[ERROR] {type(e).__name__}: {e}")
+        logger.error(f"[LOAD] ERROR: {e}")
         logger.error(traceback.format_exc())
-        return None
+        _load_error = str(e)
+        return False
+
+class RecommendRequest(BaseModel):
+    query: str
 
 @app.post("/recommend")
 def recommend(req: RecommendRequest):
-    """Recommendation endpoint - BM25 search"""
-    logger.info(f"[REQUEST] Query: {req.query[:100]}")
+    """Recommendation endpoint"""
+    logger.info(f"[REQUEST] {req.query[:60]}")
     
     try:
-        logger.info("[DEBUG] Starting get_or_load_recommender...")
-        rec = get_or_load_recommender()
-        logger.info(f"[DEBUG] Got recommender: {rec is not None}")
+        # Load if needed
+        if not load_data():
+            logger.warning("[FALLBACK] Data not loaded")
+            return get_mocks()
         
-        if rec is None:
-            logger.warning("[FALLBACK] Recommender is None - loading failed")
-            return get_mock_recommendations(req.query)
+        # BM25 search
+        query_tokens = req.query.lower().split()
+        scores = _bm25.get_scores(query_tokens)
         
-        logger.info("[EXEC] Running BM25 search...")
-        results = rec.search(req.query, k=10)
-        logger.info(f"[DEBUG] Search returned: {len(results)} items")
+        # Get top 10
+        top_idx = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:10]
+        results = [_meta[i] for i in top_idx if i < len(_meta)]
         
-        if results and len(results) > 0:
-            logger.info(f"[SUCCESS] Returned {len(results)} recommendations")
+        if results:
+            logger.info(f"[RESULT] {len(results)} assessments")
             return {"recommended_assessments": results}
         else:
-            logger.warning("[EMPTY] BM25 search returned 0 results")
-            return get_mock_recommendations(req.query)
-            
+            return get_mocks()
+        
     except Exception as e:
-        logger.error(f"[ERROR] {type(e).__name__}: {e}")
-        logger.error(traceback.format_exc())
-        return get_mock_recommendations(req.query)
+        logger.error(f"[ERROR] {e}")
+        return get_mocks()
 
-def get_mock_recommendations(query: str):
-    """Fallback mock recommendations"""
-    logger.info(f"[MOCK] Returning fallback for: {query[:40]}")
-    
+def get_mocks():
+    """Fallback mock data"""
     return {
         "recommended_assessments": [
             {
-                "name": "Java Developer Test",
-                "url": "https://www.shl.com/products/product-catalog/view/java-developer/",
-                "description": "Comprehensive Java programming assessment",
-                "duration": 60,
-                "test_type": ["Knowledge & Skills"],
-                "adaptive_support": "Yes",
-                "remote_support": "Yes"
-            },
-            {
-                "name": "Leadership Assessment",
-                "url": "https://www.shl.com/products/product-catalog/view/leadership-assessment/",
-                "description": "Evaluate leadership potential and decision-making",
-                "duration": 45,
-                "test_type": ["Personality & Behavior"],
+                "name": "Placeholder - Real Data Unavailable",
+                "url": "https://www.shl.com",
+                "description": "Using mock data",
+                "duration": 0,
+                "test_type": [],
                 "adaptive_support": "No",
                 "remote_support": "Yes"
-            },
+            }
         ]
     }
 

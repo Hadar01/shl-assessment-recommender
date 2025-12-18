@@ -34,7 +34,7 @@ def health():
     return {"status": "healthy"}
 
 def get_or_load_recommender():
-    """Lazy load recommender only when needed (memory efficient)"""
+    """Lazy load recommender only when needed (BM25 only for speed on free tier)"""
     global _recommender, _load_attempted
     
     if _recommender is not None:
@@ -47,24 +47,37 @@ def get_or_load_recommender():
     _load_attempted = True
     
     try:
-        logger.info("[LOAD] Loading recommender...")
+        logger.info("[LOAD] Loading BM25-only recommender...")
         
-        from shlrec.recommender import Recommender
-        from shlrec.settings import get_settings
+        import pickle
+        import json
+        from rank_bm25 import BM25Okapi
         
-        settings = get_settings()
+        settings_module = __import__('shlrec.settings', fromlist=['get_settings'])
+        settings = settings_module.get_settings()
         index_dir = Path(settings.index_dir)
         
         if not index_dir.exists():
             raise FileNotFoundError(f"Index dir not found: {index_dir}")
         
-        logger.info(f"[LOAD] Creating Recommender from {index_dir}")
-        _recommender = Recommender(index_dir=settings.index_dir)
+        # Load BM25 index (very fast)
+        logger.info("[LOAD] Loading BM25 index...")
+        with open(index_dir / "bm25.pkl", "rb") as f:
+            bm25 = pickle.load(f)
         
-        logger.info("[LOAD] Triggering lazy load...")
-        _recommender._lazy_load()
+        # Load metadata (fast)
+        logger.info("[LOAD] Loading metadata...")
+        with open(index_dir / "meta.json", "r") as f:
+            meta = json.load(f)
         
-        logger.info("[SUCCESS] Recommender ready!")
+        # Create minimal recommender object
+        _recommender = type('SimpleRec', (), {
+            'bm25': bm25,
+            'meta': meta,
+            'tokens': None
+        })()
+        
+        logger.info("[SUCCESS] BM25 recommender ready!")
         return _recommender
         
     except Exception as e:
@@ -75,10 +88,9 @@ def get_or_load_recommender():
 @app.post("/recommend")
 def recommend(req: RecommendRequest):
     """
-    Main recommendation endpoint.
-    Lazy loads recommender on first request.
+    Recommendation endpoint using fast BM25 search.
     """
-    logger.info(f"[REQUEST] Query: {req.query[:80]}")
+    logger.info(f"[REQUEST] Query: {req.query[:100]}")
     
     try:
         rec = get_or_load_recommender()
@@ -87,14 +99,27 @@ def recommend(req: RecommendRequest):
             logger.warning("[FALLBACK] Using mock recommendations")
             return get_mock_recommendations(req.query)
         
-        logger.info("[EXEC] Calling recommender.recommend()...")
-        results = rec.recommend(query_or_url=req.query, k=10)
+        logger.info("[EXEC] Running BM25 search...")
+        
+        # BM25 search
+        query_tokens = req.query.lower().split()
+        scores = rec.bm25.get_scores(query_tokens)
+        
+        # Get top 10
+        top_indices = sorted(range(len(scores)), key=lambda i: scores[i], reverse=True)[:10]
+        
+        # Build results
+        results = []
+        for idx in top_indices:
+            if idx < len(rec.meta):
+                item = dict(rec.meta[idx])
+                results.append(item)
         
         if results:
             logger.info(f"[SUCCESS] Returned {len(results)} recommendations")
             return {"recommended_assessments": results}
         else:
-            logger.warning("[EMPTY] Recommender returned no results")
+            logger.warning("[EMPTY] BM25 returned no results")
             return get_mock_recommendations(req.query)
             
     except Exception as e:

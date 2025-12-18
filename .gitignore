@@ -1,0 +1,61 @@
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+*.egg-info/
+dist/
+build/
+
+# Python cache
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.tox/
+.coverage
+.coverage.*
+.cache
+nosetests.xml
+coverage.xml
+*.cover
+.hypothesis/
+
+# IDEs
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Sensitive data
+*.key
+*.pem
+secrets.json
+
+# Index and cache files (large)
+data/index/
+.cache/
+*.pkl
+
+# Generated files (optional - include for reproducibility)
+# Uncomment to exclude:
+# data/catalog.jsonl
+# predictions.csv
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Project specific
+*.xlsx~
+.streamlit/

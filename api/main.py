@@ -24,16 +24,33 @@ class AssessmentOut(BaseModel):
 @app.get("/health")
 def health():
     # Required by assignment: return {"status":"healthy"}
+    global _index_error
+    if _index_error:
+        return {"status": "healthy", "warning": f"Index not loaded: {_index_error}"}
     return {"status": "healthy"}
 
+@app.get("/status")
+def status():
+    """Check if recommender is ready"""
+    global _recommender, _index_error
+    if _recommender is not None:
+        return {"ready": True, "message": "Recommender loaded"}
+    if _index_error:
+        return {"ready": False, "message": f"Index error: {_index_error}"}
+    return {"ready": False, "message": "Recommender not initialized"}
+
 _recommender = None
+_index_error = None
 
 def get_recommender() -> Recommender:
-    global _recommender
+    global _recommender, _index_error
     if _recommender is None:
-        s = get_settings()
-        _recommender = Recommender(index_dir=s.index_dir)
-    return _recommender
+        try:
+            s = get_settings()
+            _recommender = Recommender(index_dir=s.index_dir)
+        except Exception as e:
+            _index_error = str(e)
+            raise
 
 @app.post("/recommend")
 def recommend(req: RecommendRequest):
